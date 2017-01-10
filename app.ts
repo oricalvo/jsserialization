@@ -1,11 +1,10 @@
-import {Serializer, Stream, StringStream} from "./serializer";
+import {Serializer} from "./Serializer";
+import {StringStream} from "./streams/StringStream";
 
 const serializer = new Serializer();
 const obj = {
-    id: 1,
     name: "Ori",
     sibling: {
-        id: 2,
         name: "Roni"
     }
 };
@@ -16,4 +15,7 @@ const stream = new StringStream();
 
 serializer.serialize(obj, stream);
 
-console.log(stream.get());
+const str = stream.get();
+
+const obj2 = serializer.deserialize(new StringStream(str));
+console.log(obj2);

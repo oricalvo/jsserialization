@@ -1,0 +1,22 @@
+{
+  "name": "jsserialization",
+  "version": "1.0.0",
+  "description": "",
+  "main": "StringBuilder.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oricalvo/jsserialization.git"
+  },
+  "author": "Ori Calvo",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/oricalvo/jsserialization/issues"
+  },
+  "homepage": "https://github.com/oricalvo/jsserialization#readme",
+  "dependencies": {
+    "typescript": "^2.1.4"
+  }
+}
