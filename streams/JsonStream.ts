@@ -1,8 +1,8 @@
 import {StringBuilder} from "../common/StringBuilder";
 import {isDigit} from "../common/helpers";
-import {SerializerStream} from "./Stream";
+import {SerializerStream, TypeId} from "./Stream";
 
-export class StringStream implements SerializerStream {
+export class JsonStream implements SerializerStream {
     private str: string;
     private index: number;
 
@@ -36,7 +36,7 @@ export class StringStream implements SerializerStream {
         return this.str[this.index];
     }
 
-    readArrayElement(index: number): boolean {
+    readArrayNext(index: number): boolean {
         const ch = this.peekChar();
         if(ch == "]") {
             return false;
@@ -86,25 +86,31 @@ export class StringStream implements SerializerStream {
         return str;
     }
 
-    readTypeId(): string {
+    readTypeId(): TypeId {
         const ch1 = this.str[this.index];
         const ch2 = this.str[this.index + 1];
         const ch3 = this.str[this.index + 2];
 
         if(ch1=="\"" && ch2=="$" && ch3=="$") {
-            return "REF";
+            return TypeId.REF;
         }
         else if(ch1=="\"") {
-            return "STR";
+            return TypeId.STR;
         }
         else if(ch1=="{") {
-            return "OBJ";
+            return TypeId.OBJ;
+        }
+        else if(ch1=="[") {
+            return TypeId.ARR;
+        }
+        else if(ch1=="t" || ch1=="f") {
+            return TypeId.BOOL;
         }
         else if(isDigit(ch1)) {
-            return "NUM";
+            return TypeId.NUM;
         }
         else {
-            throw new Error(`Failed to detect typeId at position ${this.index}`);
+            throw new Error(`Failed to detect typeId at position ${this.index} ${ch1}${ch2}`);
         }
     }
 
@@ -113,6 +119,26 @@ export class StringStream implements SerializerStream {
 
         const res = this.readStringUntil("\"", [undefined]);
         return res;
+    }
+
+    readBoolean(): boolean {
+        const ch = this.readChar();
+        if(ch == "t") {
+            this.ensureChar("r");
+            this.ensureChar("u");
+            this.ensureChar("e");
+            return true;
+        }
+        else if(ch == "f") {
+            this.ensureChar("a");
+            this.ensureChar("l");
+            this.ensureChar("s");
+            this.ensureChar("e");
+            return false;
+        }
+        else {
+            throw new Error("Invalid boolean value first character: " + ch);
+        }
     }
 
     readNumber(): number {
@@ -139,11 +165,7 @@ export class StringStream implements SerializerStream {
                 continue;
             }
 
-            if (ch == "]" || ch == "}" || ch == ",") {
-                break;
-            }
-
-            throw new Error(`Unexpected character ${ch} at position ${this.index}`);
+            break;
         }
 
         const str = res.join();
@@ -152,7 +174,9 @@ export class StringStream implements SerializerStream {
     }
 
     readFieldBegin(index: number): string {
-        const name = this.readStringUntil(":", ["{", "}", "[", "]", undefined]);
+        this.ensureChar("\"");
+        const name = this.readStringUntil("\"", ["{", "}", "[", "]", undefined]);
+        this.ensureChar(":");
         return name;
     }
 
@@ -171,7 +195,7 @@ export class StringStream implements SerializerStream {
         this.buffer.append("[");
     }
 
-    writeArrayElement(index: number) {
+    writeArrayNext(index: number) {
         if(index > 0) {
             this.buffer.append(",");
         }
@@ -211,7 +235,7 @@ export class StringStream implements SerializerStream {
         if(index>0) {
             this.buffer.append(",");
         }
-        this.buffer.append(name + ":");
+        this.buffer.append("\"" + name + "\":");
     }
 
     writeFieldEnd(name: string) {
@@ -225,7 +249,7 @@ export class StringStream implements SerializerStream {
         this.buffer.append("}");
     }
 
-    writeTypeId(typeId: string) {
+    writeTypeId(typeId: TypeId) {
     }
 
     readReference(): number {
@@ -233,9 +257,8 @@ export class StringStream implements SerializerStream {
         this.ensureChar("$");
         this.ensureChar("$");
 
-        const str = this.readStringUntil("\"", [], ["0","1","2","3","4","5","6","7","8","9"]);
-        const objId = parseInt(str);
-
+        const objId = this.readNumber();
+        this.ensureChar("\"");
         return objId;
     }
 
@@ -249,6 +272,10 @@ export class StringStream implements SerializerStream {
 
     writeNumber(num: number) {
         this.buffer.append(num.toString());
+    }
+
+    writeBoolean(val: boolean) {
+        this.buffer.append(val.toString());
     }
 
     get() {
