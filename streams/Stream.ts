@@ -4,9 +4,9 @@ export interface SerializerStream {
     readTypeId(): string;
     readReference(): number;
 
-    readBegin();
-    readNext(index: number): boolean;
-    readEnd();
+    readArrayBegin();
+    readArrayElement(index: number): boolean;
+    readArrayEnd();
 
     readFieldNext(index: number): boolean;
     readFieldBegin(index: number): string;
@@ -15,24 +15,17 @@ export interface SerializerStream {
     readObjectBegin();
     readObjectEnd();
 
-    writeFieldNext(index: number): string;
     writeFieldBegin(name: string, index: number);
     writeFieldEnd(name: string, index: number);
-
-    writeObjectBegin(obj);
-    writeObjectEnd();
 
     writeString(str: string);
     writeNumber(num: number);
     writeTypeId(typeId: string);
     writeReference(objId: number);
 
-    writeBegin();
-    writeNext(index: number);
-    writeEnd();
-
-    writeFieldBegin(name: string, index: number);
-    writeFieldEnd(name: string, index: number);
+    writeArrayBegin();
+    writeArrayElement(index: number);
+    writeArrayEnd();
 
     writeObjectBegin(obj);
     writeObjectEnd();

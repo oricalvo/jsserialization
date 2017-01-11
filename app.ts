@@ -11,11 +11,14 @@ const obj = {
 
 obj.sibling["sibling"] = obj;
 
+console.log(obj);
+
 const stream = new StringStream();
 
 serializer.serialize(obj, stream);
 
 const str = stream.get();
+console.log(str);
 
 const obj2 = serializer.deserialize(new StringStream(str));
 console.log(obj2);

@@ -1,7 +1,8 @@
 import {StringBuilder} from "../common/StringBuilder";
 import {isDigit} from "../common/helpers";
+import {SerializerStream} from "./Stream";
 
-export class StringStream {
+export class StringStream implements SerializerStream {
     private str: string;
     private index: number;
 
@@ -10,6 +11,7 @@ export class StringStream {
     constructor(str?: string) {
         this.str = str;
         this.buffer = new StringBuilder();
+        this.index = 0;
     }
 
     private ensureChar(expected): string {
@@ -26,23 +28,33 @@ export class StringStream {
         return ch;
     }
 
-    readBegin() {
+    readArrayBegin() {
         this.ensureChar("[");
     }
 
-    readNext(index: number): boolean {
-        if(this.str[this.index] === undefined) {
+    private peekChar() {
+        return this.str[this.index];
+    }
+
+    readArrayElement(index: number): boolean {
+        const ch = this.peekChar();
+        if(ch == "]") {
             return false;
         }
-
-        if (index > 0) {
-            this.ensureChar(",");
+        else if(ch===undefined) {
+            this.unexpected(undefined, this.index);
         }
+
+        if(index == 0) {
+            return true;
+        }
+
+        this.ensureChar(",");
 
         return true;
     }
 
-    readEnd() {
+    readArrayEnd() {
         this.ensureChar("]");
     }
 
@@ -51,7 +63,7 @@ export class StringStream {
     }
 
     private readStringUntil(end: string, unexpected?: any[], allowed?: any[]): string {
-        const res = [];
+        const res = new StringBuilder();
         while (true) {
             let index = this.index++;
             let ch = this.str[index];
@@ -67,10 +79,10 @@ export class StringStream {
                 this.unexpected(ch, index)
             }
 
-            res.push(ch);
+            res.append(ch);
         }
 
-        const str = res.join();
+        const str = res.build();
         return str;
     }
 
@@ -79,7 +91,7 @@ export class StringStream {
         const ch2 = this.str[this.index + 1];
         const ch3 = this.str[this.index + 2];
 
-        if(ch1=="\"" && ch2=="$" && ch=="$") {
+        if(ch1=="\"" && ch2=="$" && ch3=="$") {
             return "REF";
         }
         else if(ch1=="\"") {
@@ -108,7 +120,7 @@ export class StringStream {
         const res = [];
         while (true) {
             let ch = this.str[this.index];
-            if (this.isDigit(ch)) {
+            if (isDigit(ch)) {
                 res.push(ch);
 
                 ++this.index;
@@ -127,7 +139,7 @@ export class StringStream {
                 continue;
             }
 
-            if (ch == "]" || ch == "}") {
+            if (ch == "]" || ch == "}" || ch == ",") {
                 break;
             }
 
@@ -140,10 +152,6 @@ export class StringStream {
     }
 
     readFieldBegin(index: number): string {
-        if(index>0) {
-            this.ensureChar(",");
-        }
-
         const name = this.readStringUntil(":", ["{", "}", "[", "]", undefined]);
         return name;
     }
@@ -159,17 +167,17 @@ export class StringStream {
         this.ensureChar("}");
     }
 
-    writeBegin() {
+    writeArrayBegin() {
         this.buffer.append("[");
     }
 
-    writeNext(index: number) {
-        if(index  > 0) {
+    writeArrayElement(index: number) {
+        if(index > 0) {
             this.buffer.append(",");
         }
     }
 
-    writeEnd() {
+    writeArrayEnd() {
         this.buffer.append("]");
     }
 
@@ -200,10 +208,13 @@ export class StringStream {
     }
 
     writeFieldBegin(name: string, index: number) {
+        if(index>0) {
+            this.buffer.append(",");
+        }
         this.buffer.append(name + ":");
     }
 
-    writeFieldEnd(name: string, index: number) {
+    writeFieldEnd(name: string) {
     }
 
     writeObjectBegin(obj) {
@@ -222,7 +233,7 @@ export class StringStream {
         this.ensureChar("$");
         this.ensureChar("$");
 
-        const str = this.readStringUntil("\"", [], [0,1,2,3,4,5,6,7,8,9]);
+        const str = this.readStringUntil("\"", [], ["0","1","2","3","4","5","6","7","8","9"]);
         const objId = parseInt(str);
 
         return objId;

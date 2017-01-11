@@ -1,5 +1,13 @@
-import {StringBuilder} from "./common/StringBuilder";
 import {SerializerStream} from "./streams/Stream";
+
+class TypeId {
+    static OBJ = new TypeId("OBJ");
+    static STR = new TypeId("STR");
+    static NUM = new TypeId("NUM");
+
+    constructor(public name: string) {
+    }
+}
 
 export class Serializer {
     private stack: any[];
@@ -25,59 +33,58 @@ export class Serializer {
         this.pending.push(obj);
 
         let index = 0;
-        stream.writeBegin();
+        stream.writeArrayBegin();
 
         while(this.pending.length > 0) {
-            stream.writeNext(index++);
+            stream.writeArrayElement(index);
 
             const obj = this.pending.pop();
             this.writeObject(stream, obj);
+
+            ++index;
         }
 
-        stream.writeEnd();
+        stream.writeArrayEnd();
     }
 
     deserialize(stream: SerializerStream) {
         let index = 0;
         let root = null;
-        let objects = {};
 
-        stream.readBegin();
+        stream.readArrayBegin();
 
-        while(this.pending.length > 0) {
-            if(stream.readNext(index++)) {
-                const obj = this.readObject(stream);
-                if(!root) {
-                    root = obj;
-                }
-                objects[obj["$$id"]] = obj;
+        while(stream.readArrayElement(index++)) {
+            const obj = this.readObject(stream);
+            if(!root) {
+                root = obj;
             }
         }
 
         for(let entry of this.pending) {
-            const value = objects[entry.ref];
-            if(value === undefined) {
+            const objId = entry.obj[entry.field];
+            const obj = this.map.get(objId);
+            if(obj === undefined) {
                 throw new Error(`Invalid reference ${entry.ref}`);
             }
 
-            entry.obj[entry.field] = value;
+            entry.obj[entry.field] = obj;
         }
 
-        stream.readEnd();
+        stream.readArrayEnd();
 
         return root;
     }
 
-    private getTypeId(obj) {
+    private getTypeId(obj): TypeId {
         const type = typeof obj;
         if(type == "string") {
-            return "STR";
+            return TypeId.STR;
         }
         else if(type == "number") {
-            return "NUM";
+            return TypeId.NUM;
         }
         if(type == "object") {
-            return "OBJ";
+            return TypeId.OBJ;
         }
     }
 
@@ -101,13 +108,13 @@ export class Serializer {
 
     private readObject(stream: SerializerStream) {
         const typeId: string = stream.readTypeId();
-        if(typeId == "STR") {
+        if(typeId == TypeId.STR.name) {
             return stream.readString();
         }
-        else if(typeId == "NUM") {
+        else if(typeId == TypeId.NUM.name) {
             return stream.readNumber();
         }
-        else if(typeId == "OBJ") {
+        else if(typeId == TypeId.OBJ.name) {
             stream.readObjectBegin();
 
             let obj = {};
@@ -121,7 +128,15 @@ export class Serializer {
                 this.stack.push(name);
 
                 const value = this.readObject(stream);
-                obj[name] = value;
+
+                if(name == "$$id") {
+                    this.map.set(value, obj);
+                }
+                else if(name == "$$type") {
+                }
+                else {
+                    obj[name] = value;
+                }
 
                 this.stack.pop();
 
@@ -147,7 +162,6 @@ export class Serializer {
         else {
             throw new Error(`Unexpected typeId: ${typeId}`);
         }
-
     }
 
     private writeObject(stream: SerializerStream, obj) {
@@ -156,13 +170,13 @@ export class Serializer {
         try {
             const typeId = this.getTypeId(obj);
 
-            if (typeId == "STR") {
+            if (typeId == TypeId.STR) {
                 stream.writeString(obj);
             }
-            else if (typeId == "NUM") {
+            else if (typeId == TypeId.NUM) {
                 stream.writeNumber(obj);
             }
-            if (typeId == "OBJ") {
+            if (typeId == TypeId.OBJ) {
                 let objId = this.map.get(obj);
                 let firstTimeSeen: boolean = false;
                 if (objId === undefined) {
@@ -187,7 +201,7 @@ export class Serializer {
                 stream.writeFieldEnd("$$id", index++);
 
                 stream.writeFieldBegin("$$type", index);
-                stream.writeString("OBEJCT");
+                stream.writeString("Object");
                 stream.writeFieldEnd("$$type", index++);
 
                 for (let key in obj) {
