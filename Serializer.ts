@@ -1,23 +1,36 @@
 import {SerializerStream, TypeId} from "./streams/Stream";
+import {ObjectFieldBag} from "./ObjectFieldBag";
 
 export class Serializer {
     private stack: any[];
     private map;
     private nextObjId: number;
     private pending: any[];
+    private typeToId: Map<any, string>;
+    private idToType: Map<string, any>;
 
     constructor() {
         this.stack = [];
         this.pending = [];
         this.map = new Map();
         this.nextObjId = 1;
+        this.idToType = new Map<string, any>();
+        this.typeToId = new Map<any, string>();
+
+        this.registerType("Object", Object);
+    }
+
+    registerType(id: string, type: any) {
+        if(this.idToType.has(id)) {
+            throw new Error("id: " + id + " is already registered");
+        }
+
+        this.idToType.set(id, type);
+        this.typeToId.set(type, id);
     }
 
     private generateObjId(): number {
         return this.nextObjId++;
-    }
-
-    registerType(typeId: string, ctor: Function) {
     }
 
     serialize(obj, stream: SerializerStream) {
@@ -185,10 +198,64 @@ export class Serializer {
     private readObject(stream: SerializerStream) {
         stream.readObjectBegin();
 
-        let obj = {};
         let index = 0;
 
+        stream.readFieldNext(index);
+        stream.readFieldBegin(index);
+        let $$id = stream.readNumber();
+        stream.readFieldEnd(index++);
+
+        stream.readFieldNext(index);
+        stream.readFieldBegin(index);
+        let $$type = stream.readString();
+        stream.readFieldEnd(index++);
+
+        const ctor = this.idToType.get($$type);
+        if(ctor == undefined) {
+            throw new Error("Unregistered $$type " + $$type);
+        }
+
+        let obj;
+        if(ctor == Object) {
+            obj = this.readSimpleObject(stream, $$id, index);
+        }
+        else {
+            obj = this.readCustomObject(stream, $$id, ctor, index);
+        }
+
+        stream.readObjectEnd();
+
+        return obj;
+    }
+
+    private createUninitializedObject(proto) {
+        function _() {}
+        _.prototype = proto;
+        var obj = new _();
+        return obj;
+    }
+
+    private readCustomObject(stream: SerializerStream, objId: number, ctor, index: number) {
+        const obj = this.createUninitializedObject(ctor.prototype);
+
         this.stack.push(obj);
+        this.map.set(objId, obj);
+
+        const fields: ObjectFieldBag = this.readObjectFields(stream, index);
+
+        if(!obj.deserialize) {
+            throw new Error("Object has no deserialize method");
+        }
+
+        obj.deserialize(fields);
+
+        this.stack.pop();
+
+        return obj;
+    }
+
+    private readObjectFields(stream: SerializerStream, index: number): ObjectFieldBag {
+        let fields = new ObjectFieldBag();
 
         while(stream.readFieldNext(index)) {
             const name = stream.readFieldBegin(index);
@@ -197,14 +264,30 @@ export class Serializer {
 
             const value = this.readValue(stream);
 
-            if(name == "$$id") {
-                this.map.set(value, obj);
-            }
-            else if(name == "$$type") {
-            }
-            else {
-                obj[name] = value;
-            }
+            this.stack.pop();
+
+            stream.readFieldEnd(index++);
+
+            fields.add(name, value);
+        }
+
+        return fields;
+    }
+
+    private readSimpleObject(stream: SerializerStream, objId: number, index: number) {
+        let obj = {};
+
+        this.stack.push(obj);
+        this.map.set(objId, obj);
+
+        while(stream.readFieldNext(index)) {
+            const name = stream.readFieldBegin(index);
+
+            this.stack.push(name);
+
+            const value = this.readValue(stream);
+
+            obj[name] = value;
 
             this.stack.pop();
 
@@ -212,8 +295,6 @@ export class Serializer {
         }
 
         this.stack.pop();
-
-        stream.readObjectEnd();
 
         return obj;
     }
@@ -261,23 +342,45 @@ export class Serializer {
         }
     }
 
-    private writeObject(stream: SerializerStream, obj) {
+    private getCreateObjId(obj) {
         let objId = this.map.get(obj);
-        let firstTimeSeen: boolean = false;
+        let created: boolean = false;
         if (objId === undefined) {
             objId = this.generateObjId();
-            firstTimeSeen = true;
+            created = true;
             this.map.set(obj, objId);
         }
 
+        return {
+            objId,
+            created
+        };
+    }
+
+    private writeObject(stream: SerializerStream, obj) {
+        const {objId, created} = this.getCreateObjId(obj);
+        const objType = this.getObjectType(obj);
+
         if (this.stack.length > 1) {
-            if (firstTimeSeen) {
+            if (created) {
+                //
+                //  This object was not serialized before. Remember to do that
+                //
                 this.pending.push(obj);
             }
             stream.writeReference(objId);
             return;
         }
 
+        if(objType == "Object") {
+            this.writeSimpleObject(stream, obj, objId, objType);
+        }
+        else {
+            this.writeCustomObject(stream, obj, objId, objType);
+        }
+    }
+
+    private writeSimpleObject(stream: SerializerStream, obj, objId: number, objType: string) {
         stream.writeObjectBegin(obj);
 
         let index = 0;
@@ -286,7 +389,7 @@ export class Serializer {
         stream.writeFieldEnd("$$id", index++);
 
         stream.writeFieldBegin("$$type", index);
-        stream.writeString("Object");
+        stream.writeString(objType);
         stream.writeFieldEnd("$$type", index++);
 
         for (let key in obj) {
@@ -298,5 +401,42 @@ export class Serializer {
         }
 
         stream.writeObjectEnd();
+    }
+
+    private writeField(stream: SerializerStream, name: string, value: any, index: number) {
+        stream.writeFieldBegin(name, index);
+        this.writeValue(stream, value);
+        stream.writeFieldEnd(name, index);
+    }
+
+    private writeCustomObject(stream: SerializerStream, obj, objId: number, objType: string) {
+        if(!obj.serialize) {
+            throw new Error("Custom object has no serialize method");
+        }
+
+        stream.writeObjectBegin(obj);
+
+        const bag = new ObjectFieldBag();
+        obj.serialize(bag);
+
+        let index = 0;
+        this.writeField(stream, "$$id", objId, index++);
+        this.writeField(stream, "$$type", objType, index++);
+        for(let field of bag.getAll()) {
+            this.writeField(stream, field.name, field.value, index++);
+        }
+
+        stream.writeObjectEnd();
+    }
+
+    private getObjectType(obj): string {
+        const proto = Object.getPrototypeOf(obj);
+
+        const id = this.typeToId.get(proto.constructor);
+        if(id == undefined) {
+            throw new Error("Unregistered type encountered");
+        }
+
+        return id;
     }
 }
