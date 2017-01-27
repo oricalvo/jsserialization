@@ -10,13 +10,25 @@ export function isDigit(ch: string) {
     return false;
 }
 
-export function deepCompare(obj1, obj2) {
+export function deepCompare(obj1, obj2, visited?: Map<any, any>): boolean {
     const type = typeof obj1;
     if(type != typeof obj2) {
         return false;
     }
 
     if(type == "object") {
+        visited = visited || new Map<any, any>();
+        if(visited.has(obj1)) {
+            const res = visited.get(obj1)!=obj2;
+            if(!res) {
+                return false;
+            }
+
+            return true;
+        }
+
+        visited.set(obj1, obj2);
+
         if(Object.getPrototypeOf(obj1)!=Object.getPrototypeOf(obj2)) {
             return false;
         }
@@ -33,8 +45,8 @@ export function deepCompare(obj1, obj2) {
             }
         }
 
-        for(let key in Object.keys(obj1)) {
-            if(!deepCompare(obj1[key], obj2[key])) {
+        for(let key of Object.keys(obj1)) {
+            if(!deepCompare(obj1[key], obj2[key], visited)) {
                 return false;
             }
         }

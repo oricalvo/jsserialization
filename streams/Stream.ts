@@ -12,6 +12,13 @@ export class TypeId {
     }
 }
 
+export class ObjId {
+    static UNDEFINED = new ObjId(-1);
+
+    constructor(public value: number) {
+    }
+}
+
 export interface SerializationStream {
     readArrayBegin();
     readArrayNext(index: number): boolean;

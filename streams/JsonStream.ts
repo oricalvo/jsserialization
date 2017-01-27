@@ -1,6 +1,6 @@
 import {StringBuilder} from "../common/StringBuilder";
 import {isDigit} from "../common/helpers";
-import {SerializationStream, TypeId} from "./Stream";
+import {SerializationStream, TypeId, ObjId} from "./Stream";
 
 export class JsonStream implements SerializationStream {
     private str: string;
@@ -100,6 +100,8 @@ export class JsonStream implements SerializationStream {
         const ch1 = this.str[this.index];
         const ch2 = this.str[this.index + 1];
         const ch3 = this.str[this.index + 2];
+        const ch4 = this.str[this.index + 3];
+        const ch5 = this.str[this.index + 4];
 
         if(ch1=="\"" && ch2=="$" && ch3=="$") {
             return TypeId.REF;
@@ -108,6 +110,10 @@ export class JsonStream implements SerializationStream {
             return TypeId.STR;
         }
         else if(ch1=="{") {
+            if(ch2=="\"" && ch3=="$" && ch4=="$" && ch5=="u") {
+                return TypeId.UNDEFINED;
+            }
+
             return TypeId.OBJ;
         }
         else if(ch1=="[") {
@@ -161,7 +167,7 @@ export class JsonStream implements SerializationStream {
     }
 
     readUndefined() {
-        this.readToken("undefined");
+        this.readToken(`{"$$undefined": 1}`);
 
         return undefined;
     }
@@ -193,7 +199,7 @@ export class JsonStream implements SerializationStream {
             break;
         }
 
-        const str = res.join();
+        const str = res.join("");
         const num: number = parseFloat(str);
         return num;
     }
@@ -308,7 +314,7 @@ export class JsonStream implements SerializationStream {
     }
 
     writeUndefined() {
-        this.writeLiteral("undefined");
+        this.writeLiteral(`{"$$undefined": 1}`);
     }
 
     private writeLiteral(val: any) {

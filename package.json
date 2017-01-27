@@ -4,7 +4,8 @@
   "description": "",
   "main": "StringBuilder.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jasmine",
+    "ts": "tsc"
   },
   "repository": {
     "type": "git",
@@ -19,5 +20,9 @@
   "dependencies": {
     "lodash": "^4.17.4",
     "typescript": "^2.1.4"
+  },
+  "devDependencies": {
+    "@types/jasmine": "^2.5.41",
+    "jasmine": "^2.5.3"
   }
 }
