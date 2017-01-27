@@ -5,12 +5,14 @@ export class TypeId {
     static REF = new TypeId("REF");
     static ARR = new TypeId("ARR");
     static BOOL = new TypeId("BOOL");
+    static NULL = new TypeId("NULL");
+    static UNDEFINED = new TypeId("UNDEFINED");
 
     constructor(public name: string) {
     }
 }
 
-export interface SerializerStream {
+export interface SerializationStream {
     readArrayBegin();
     readArrayNext(index: number): boolean;
     readArrayEnd();
@@ -27,6 +29,8 @@ export interface SerializerStream {
     readBoolean(): boolean;
     readTypeId(): TypeId;
     readReference(): number;
+    readNull();
+    readUndefined();
 
     writeArrayBegin();
     writeArrayNext(index: number);
@@ -43,4 +47,6 @@ export interface SerializerStream {
     writeBoolean(val: boolean);
     writeTypeId(typeId: TypeId);
     writeReference(objId: number);
+    writeNull();
+    writeUndefined();
 }

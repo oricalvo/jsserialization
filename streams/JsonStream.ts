@@ -1,8 +1,8 @@
 import {StringBuilder} from "../common/StringBuilder";
 import {isDigit} from "../common/helpers";
-import {SerializerStream, TypeId} from "./Stream";
+import {SerializationStream, TypeId} from "./Stream";
 
-export class JsonStream implements SerializerStream {
+export class JsonStream implements SerializationStream {
     private str: string;
     private index: number;
 
@@ -62,6 +62,16 @@ export class JsonStream implements SerializerStream {
         throw new Error(`Unexpected character ${ch} at position ${index}`);
     }
 
+    private readToken(token: string) {
+        let index = 0;
+        while (index < token.length) {
+            let ch = this.str[this.index++];
+            if(ch != token[index++]) {
+                this.unexpected(ch, index)
+            }
+        }
+    }
+
     private readStringUntil(end: string, unexpected?: any[], allowed?: any[]): string {
         const res = new StringBuilder();
         while (true) {
@@ -103,6 +113,9 @@ export class JsonStream implements SerializerStream {
         else if(ch1=="[") {
             return TypeId.ARR;
         }
+        else if(ch1=="n" && ch2=="u") {
+            return TypeId.NULL;
+        }
         else if(ch1=="t" || ch1=="f") {
             return TypeId.BOOL;
         }
@@ -139,6 +152,18 @@ export class JsonStream implements SerializerStream {
         else {
             throw new Error("Invalid boolean value first character: " + ch);
         }
+    }
+
+    readNull() {
+        this.readToken("null");
+
+        return null;
+    }
+
+    readUndefined() {
+        this.readToken("undefined");
+
+        return undefined;
     }
 
     readNumber(): number {
@@ -275,7 +300,19 @@ export class JsonStream implements SerializerStream {
     }
 
     writeBoolean(val: boolean) {
-        this.buffer.append(val.toString());
+        this.writeLiteral(val);
+    }
+
+    writeNull() {
+        this.writeLiteral(null);
+    }
+
+    writeUndefined() {
+        this.writeLiteral("undefined");
+    }
+
+    private writeLiteral(val: any) {
+        this.buffer.append(val + "");
     }
 
     get() {

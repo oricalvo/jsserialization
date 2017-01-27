@@ -2,7 +2,7 @@ import {Serializer} from "./Serializer";
 import {JsonStream} from "./streams/JsonStream";
 import * as lodash from "lodash";
 import {ObjectFieldBag} from "./ObjectFieldBag";
-import {SerializerStream} from "./streams/Stream";
+import {SerializationStream} from "./streams/Stream";
 import "./common/Object";
 import {SerializationMetadata} from "./SerializationMetadata";
 
